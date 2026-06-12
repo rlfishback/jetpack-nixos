@@ -32,6 +32,7 @@ let
         ./patches/nvidia-oot/0001-crypto-tegra-Disable-softirqs-before-finalizing-requ.patch
         ./patches/nvidia-oot/0001-Lower-priority-of-tegra-se-crypto.patch
         ./patches/nvidia-oot/0006-imx708-add-driver.patch
+        ./patches/nvidia-oot/0007-imx708-add-binned-modes.patch
       ];
     };
     nvgpu = gitRepos.nvgpu;

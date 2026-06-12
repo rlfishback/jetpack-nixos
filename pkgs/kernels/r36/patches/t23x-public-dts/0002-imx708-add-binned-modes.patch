@@ -1,0 +1,418 @@
+From 67c821eb13a795b5bc063b34ddaf2fe3c8522a48 Mon Sep 17 00:00:00 2001
+From: rfishback <rfishback@anduril.com>
+Date: Fri, 12 Jun 2026 12:59:40 -0700
+Subject: [PATCH] overlay: imx708: add binned and binned-cropped mode entries
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Extend the IMX708 overlays to advertise three modes per camera:
+
+- mode0: 4608x2592 @ 14 fps  (line_length 4808, pix_clk 297.6 MHz)
+- mode1: 2304x1296 @ 56 fps  (line_length 7824, pix_clk 585.6 MHz)
+- mode2: 1536x864  @ 90 fps  (line_length 5216, pix_clk 566.4 MHz)
+
+mode0 timing matches RidgeRun's working JP6.0 values unchanged.
+mode1 and mode2 use RPi imx708's native pixel_rate and line_length_pix
+constants directly — same convention as IMX219 in jetpack-nixos
+(IMX219_PIXEL_RATE = 182400000 mirrored verbatim into pix_clk_hz).
+Keeping pclk_dt / ll_dt aligned with the sensor's actual lines/sec
+gives the VI/CSI capture path the timing model the sensor really runs.
+
+mode2 is capped at 90 fps for CSI/VI margin: the sensor can hit ~120 fps
+(vblank_min=40 in RPi imx708.c), but Tegracam writes FRM_LENGTH from DT,
+so the advertised max is the rate the sensor actually sees.
+
+Updated files:
+- tegra234-camera-rbpcv3-imx708.dtsi (shared, both cam0 and cam1)
+- tegra234-p3767-camera-p3768-imx708-A.dts (CAM0 single-camera)
+- tegra234-p3767-camera-p3768-imx708-C.dts (CAM1 single-camera)
+---
+ overlay/tegra234-camera-rbpcv3-imx708.dtsi    | 170 ++++++++++++++++++
+ .../tegra234-p3767-camera-p3768-imx708-A.dts  |  85 +++++++++
+ .../tegra234-p3767-camera-p3768-imx708-C.dts  |  85 +++++++++
+ 3 files changed, 340 insertions(+)
+
+diff --git a/overlay/tegra234-camera-rbpcv3-imx708.dtsi b/overlay/tegra234-camera-rbpcv3-imx708.dtsi
+index 4ec49c9..a5e6e30 100644
+--- a/overlay/tegra234-camera-rbpcv3-imx708.dtsi
++++ b/overlay/tegra234-camera-rbpcv3-imx708.dtsi
+@@ -138,6 +138,91 @@
+ 								embedded_metadata_height = "4";
+ 							};
+ 
++							/* IMX708_MODE_2304x1296_56fps — 2x2 binned, full FOV */
++							mode1 {
++								mclk_khz = "24000";
++								num_lanes = "2";
++								tegra_sinterface = "serial_b";
++								phy_mode = "DPHY";
++								discontinuous_clk = "yes";
++								dpcm_enable = "false";
++								cil_settletime = "0";
++								lane_polarity = "6";
++
++								active_w = "2304";
++								active_h = "1296";
++								mode_type = "bayer";
++								pixel_phase = "rggb";
++								csi_pixel_bit_depth = "10";
++								readout_orientation = "90";
++								line_length = "7824";
++								inherent_gain = "1";
++								pix_clk_hz = "585600000";
++
++								gain_factor = "16";
++								framerate_factor = "1000000";
++								exposure_factor = "1000000";
++								min_gain_val = "16";
++								max_gain_val = "256";
++								step_gain_val = "1";
++								default_gain = "16";
++								min_hdr_ratio = "1";
++								max_hdr_ratio = "1";
++								min_framerate = "2000000";
++								max_framerate = "56000000";
++								step_framerate = "1";
++								default_framerate = "56000000";
++								min_exp_time = "500";
++								max_exp_time = "65487";
++								step_exp_time = "1";
++								default_exp_time = "1600";
++								embedded_metadata_height = "4";
++							};
++
++							/* IMX708_MODE_1536x864_90fps — 2x2 binned, center cropped.
++							 * Sensor max is ~120fps (vblank_min=40); capped at 90fps for
++							 * CSI/VI margin. Tegracam writes FRM_LENGTH from this DT, so
++							 * max_framerate is the actual rate the sensor sees. */
++							mode2 {
++								mclk_khz = "24000";
++								num_lanes = "2";
++								tegra_sinterface = "serial_b";
++								phy_mode = "DPHY";
++								discontinuous_clk = "yes";
++								dpcm_enable = "false";
++								cil_settletime = "0";
++								lane_polarity = "6";
++
++								active_w = "1536";
++								active_h = "864";
++								mode_type = "bayer";
++								pixel_phase = "rggb";
++								csi_pixel_bit_depth = "10";
++								readout_orientation = "90";
++								line_length = "5216";
++								inherent_gain = "1";
++								pix_clk_hz = "566400000";
++
++								gain_factor = "16";
++								framerate_factor = "1000000";
++								exposure_factor = "1000000";
++								min_gain_val = "16";
++								max_gain_val = "256";
++								step_gain_val = "1";
++								default_gain = "16";
++								min_hdr_ratio = "1";
++								max_hdr_ratio = "1";
++								min_framerate = "2000000";
++								max_framerate = "90000000";
++								step_framerate = "1";
++								default_framerate = "90000000";
++								min_exp_time = "500";
++								max_exp_time = "65487";
++								step_exp_time = "1";
++								default_exp_time = "1600";
++								embedded_metadata_height = "4";
++							};
++
+ 							ports {
+ 								#address-cells = <1>;
+ 								#size-cells = <0>;
+@@ -207,6 +292,91 @@
+ 								embedded_metadata_height = "4";
+ 							};
+ 
++							/* IMX708_MODE_2304x1296_56fps — 2x2 binned, full FOV */
++							mode1 {
++								mclk_khz = "24000";
++								num_lanes = "2";
++								tegra_sinterface = "serial_c";
++								phy_mode = "DPHY";
++								discontinuous_clk = "yes";
++								dpcm_enable = "false";
++								cil_settletime = "0";
++								lane_polarity = "6";
++
++								active_w = "2304";
++								active_h = "1296";
++								mode_type = "bayer";
++								pixel_phase = "rggb";
++								csi_pixel_bit_depth = "10";
++								readout_orientation = "90";
++								line_length = "7824";
++								inherent_gain = "1";
++								pix_clk_hz = "585600000";
++
++								gain_factor = "16";
++								framerate_factor = "1000000";
++								exposure_factor = "1000000";
++								min_gain_val = "16";
++								max_gain_val = "256";
++								step_gain_val = "1";
++								default_gain = "16";
++								min_hdr_ratio = "1";
++								max_hdr_ratio = "1";
++								min_framerate = "2000000";
++								max_framerate = "56000000";
++								step_framerate = "1";
++								default_framerate = "56000000";
++								min_exp_time = "500";
++								max_exp_time = "65487";
++								step_exp_time = "1";
++								default_exp_time = "1600";
++								embedded_metadata_height = "4";
++							};
++
++							/* IMX708_MODE_1536x864_90fps — 2x2 binned, center cropped.
++							 * Sensor max is ~120fps (vblank_min=40); capped at 90fps for
++							 * CSI/VI margin. Tegracam writes FRM_LENGTH from this DT, so
++							 * max_framerate is the actual rate the sensor sees. */
++							mode2 {
++								mclk_khz = "24000";
++								num_lanes = "2";
++								tegra_sinterface = "serial_c";
++								phy_mode = "DPHY";
++								discontinuous_clk = "yes";
++								dpcm_enable = "false";
++								cil_settletime = "0";
++								lane_polarity = "6";
++
++								active_w = "1536";
++								active_h = "864";
++								mode_type = "bayer";
++								pixel_phase = "rggb";
++								csi_pixel_bit_depth = "10";
++								readout_orientation = "90";
++								line_length = "5216";
++								inherent_gain = "1";
++								pix_clk_hz = "566400000";
++
++								gain_factor = "16";
++								framerate_factor = "1000000";
++								exposure_factor = "1000000";
++								min_gain_val = "16";
++								max_gain_val = "256";
++								step_gain_val = "1";
++								default_gain = "16";
++								min_hdr_ratio = "1";
++								max_hdr_ratio = "1";
++								min_framerate = "2000000";
++								max_framerate = "90000000";
++								step_framerate = "1";
++								default_framerate = "90000000";
++								min_exp_time = "500";
++								max_exp_time = "65487";
++								step_exp_time = "1";
++								default_exp_time = "1600";
++								embedded_metadata_height = "4";
++							};
++
+ 							ports {
+ 								#address-cells = <1>;
+ 								#size-cells = <0>;
+diff --git a/overlay/tegra234-p3767-camera-p3768-imx708-A.dts b/overlay/tegra234-p3767-camera-p3768-imx708-A.dts
+index 38c750f..e4f88c2 100644
+--- a/overlay/tegra234-p3767-camera-p3768-imx708-A.dts
++++ b/overlay/tegra234-p3767-camera-p3768-imx708-A.dts
+@@ -145,6 +145,91 @@
+ 								embedded_metadata_height = "4";
+ 							};
+ 
++							/* IMX708_MODE_2304x1296_56fps — 2x2 binned, full FOV */
++							mode1 {
++								mclk_khz = "24000";
++								num_lanes = "2";
++								tegra_sinterface = "serial_b";
++								phy_mode = "DPHY";
++								discontinuous_clk = "yes";
++								dpcm_enable = "false";
++								cil_settletime = "0";
++								lane_polarity = "6";
++
++								active_w = "2304";
++								active_h = "1296";
++								mode_type = "bayer";
++								pixel_phase = "rggb";
++								csi_pixel_bit_depth = "10";
++								readout_orientation = "90";
++								line_length = "7824";
++								inherent_gain = "1";
++								pix_clk_hz = "585600000";
++
++								gain_factor = "16";
++								framerate_factor = "1000000";
++								exposure_factor = "1000000";
++								min_gain_val = "16";
++								max_gain_val = "256";
++								step_gain_val = "1";
++								default_gain = "16";
++								min_hdr_ratio = "1";
++								max_hdr_ratio = "1";
++								min_framerate = "2000000";
++								max_framerate = "56000000";
++								step_framerate = "1";
++								default_framerate = "56000000";
++								min_exp_time = "500";
++								max_exp_time = "65487";
++								step_exp_time = "1";
++								default_exp_time = "1600";
++								embedded_metadata_height = "4";
++							};
++
++							/* IMX708_MODE_1536x864_90fps — 2x2 binned, center cropped.
++							 * Sensor max is ~120fps (vblank_min=40); capped at 90fps for
++							 * CSI/VI margin. Tegracam writes FRM_LENGTH from this DT, so
++							 * max_framerate is the actual rate the sensor sees. */
++							mode2 {
++								mclk_khz = "24000";
++								num_lanes = "2";
++								tegra_sinterface = "serial_b";
++								phy_mode = "DPHY";
++								discontinuous_clk = "yes";
++								dpcm_enable = "false";
++								cil_settletime = "0";
++								lane_polarity = "6";
++
++								active_w = "1536";
++								active_h = "864";
++								mode_type = "bayer";
++								pixel_phase = "rggb";
++								csi_pixel_bit_depth = "10";
++								readout_orientation = "90";
++								line_length = "5216";
++								inherent_gain = "1";
++								pix_clk_hz = "566400000";
++
++								gain_factor = "16";
++								framerate_factor = "1000000";
++								exposure_factor = "1000000";
++								min_gain_val = "16";
++								max_gain_val = "256";
++								step_gain_val = "1";
++								default_gain = "16";
++								min_hdr_ratio = "1";
++								max_hdr_ratio = "1";
++								min_framerate = "2000000";
++								max_framerate = "90000000";
++								step_framerate = "1";
++								default_framerate = "90000000";
++								min_exp_time = "500";
++								max_exp_time = "65487";
++								step_exp_time = "1";
++								default_exp_time = "1600";
++								embedded_metadata_height = "4";
++							};
++
+ 							ports {
+ 								#address-cells = <1>;
+ 								#size-cells = <0>;
+diff --git a/overlay/tegra234-p3767-camera-p3768-imx708-C.dts b/overlay/tegra234-p3767-camera-p3768-imx708-C.dts
+index 196c610..c395961 100644
+--- a/overlay/tegra234-p3767-camera-p3768-imx708-C.dts
++++ b/overlay/tegra234-p3767-camera-p3768-imx708-C.dts
+@@ -150,6 +150,91 @@
+ 								embedded_metadata_height = "4";
+ 							};
+ 
++							/* IMX708_MODE_2304x1296_56fps — 2x2 binned, full FOV */
++							mode1 {
++								mclk_khz = "24000";
++								num_lanes = "2";
++								tegra_sinterface = "serial_c";
++								phy_mode = "DPHY";
++								discontinuous_clk = "yes";
++								dpcm_enable = "false";
++								cil_settletime = "0";
++								lane_polarity = "6";
++
++								active_w = "2304";
++								active_h = "1296";
++								mode_type = "bayer";
++								pixel_phase = "rggb";
++								csi_pixel_bit_depth = "10";
++								readout_orientation = "90";
++								line_length = "7824";
++								inherent_gain = "1";
++								pix_clk_hz = "585600000";
++
++								gain_factor = "16";
++								framerate_factor = "1000000";
++								exposure_factor = "1000000";
++								min_gain_val = "16";
++								max_gain_val = "256";
++								step_gain_val = "1";
++								default_gain = "16";
++								min_hdr_ratio = "1";
++								max_hdr_ratio = "1";
++								min_framerate = "2000000";
++								max_framerate = "56000000";
++								step_framerate = "1";
++								default_framerate = "56000000";
++								min_exp_time = "500";
++								max_exp_time = "65487";
++								step_exp_time = "1";
++								default_exp_time = "1600";
++								embedded_metadata_height = "4";
++							};
++
++							/* IMX708_MODE_1536x864_90fps — 2x2 binned, center cropped.
++							 * Sensor max is ~120fps (vblank_min=40); capped at 90fps for
++							 * CSI/VI margin. Tegracam writes FRM_LENGTH from this DT, so
++							 * max_framerate is the actual rate the sensor sees. */
++							mode2 {
++								mclk_khz = "24000";
++								num_lanes = "2";
++								tegra_sinterface = "serial_c";
++								phy_mode = "DPHY";
++								discontinuous_clk = "yes";
++								dpcm_enable = "false";
++								cil_settletime = "0";
++								lane_polarity = "6";
++
++								active_w = "1536";
++								active_h = "864";
++								mode_type = "bayer";
++								pixel_phase = "rggb";
++								csi_pixel_bit_depth = "10";
++								readout_orientation = "90";
++								line_length = "5216";
++								inherent_gain = "1";
++								pix_clk_hz = "566400000";
++
++								gain_factor = "16";
++								framerate_factor = "1000000";
++								exposure_factor = "1000000";
++								min_gain_val = "16";
++								max_gain_val = "256";
++								step_gain_val = "1";
++								default_gain = "16";
++								min_hdr_ratio = "1";
++								max_hdr_ratio = "1";
++								min_framerate = "2000000";
++								max_framerate = "90000000";
++								step_framerate = "1";
++								default_framerate = "90000000";
++								min_exp_time = "500";
++								max_exp_time = "65487";
++								step_exp_time = "1";
++								default_exp_time = "1600";
++								embedded_metadata_height = "4";
++							};
++
+ 							ports {
+ 								#address-cells = <1>;
+ 								#size-cells = <0>;
+-- 
+2.54.0
+

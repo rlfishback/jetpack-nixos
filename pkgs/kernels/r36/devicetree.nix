@@ -15,6 +15,7 @@ let
     src = gitRepos."hardware/nvidia/t23x/nv-public";
     patches = [
       ./patches/t23x-public-dts/0001-imx708-add-camera-overlays.patch
+      ./patches/t23x-public-dts/0002-imx708-add-binned-modes.patch
     ];
   };
   patchedGitRepos = gitRepos // {
