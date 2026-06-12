@@ -1,4 +1,5 @@
-{ bspSrc
+{ applyPatches
+, bspSrc
 , gitRepos
 , kernel
 , l4tMajorMinorPatchVersion
@@ -9,6 +10,16 @@
 , ...
 }:
 let
+  t23xPublicDtsPatched = applyPatches {
+    name = "t23x-public-dts";
+    src = gitRepos."hardware/nvidia/t23x/nv-public";
+    patches = [
+      ./patches/t23x-public-dts/0001-imx708-add-camera-overlays.patch
+    ];
+  };
+  patchedGitRepos = gitRepos // {
+    "hardware/nvidia/t23x/nv-public" = t23xPublicDtsPatched;
+  };
   l4t-devicetree-sources = runCommand "l4t-devicetree-sources" { }
     (lib.strings.concatStrings
       ([ "mkdir -p $out ; cp ${bspSrc}/source/Makefile $out/Makefile ;" ] ++
@@ -18,7 +29,7 @@ let
             project:
             ''
               mkdir -p "$out/${project}"
-              cp --no-preserve=all -vr "${lib.attrsets.attrByPath [project] 0 gitRepos}"/. "$out/${project}"
+              cp --no-preserve=all -vr "${lib.attrsets.attrByPath [project] 0 patchedGitRepos}"/. "$out/${project}"
             ''
           )));
 in
