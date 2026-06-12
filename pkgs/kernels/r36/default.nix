@@ -44,6 +44,10 @@ buildLinux (args // {
       name = "Hack-to-select-VIDEOBUF2_DMA_CONTIG";
       patch = ./patches/kernel/0002-Hack-to-select-VIDEOBUF2_DMA_CONTIG.patch;
     }
+    {
+      name = "imx708-backport-upstream-driver";
+      patch = ./patches/kernel/0003-imx708-backport-upstream-driver.patch;
+    }
   ] ++ kernelPatches;
 
   structuredExtraConfig = with lib.kernel; {
@@ -101,6 +105,9 @@ buildLinux (args // {
 
     FW_LOADER_COMPRESS_XZ = yes;
     FW_LOADER_COMPRESS_ZSTD = yes;
+
+    # IMX708 sensor for libcamera-on-Jetson path
+    VIDEO_IMX708 = module;
 
     # Restore default LSM from security/Kconfig. Undoes Nvidia downstream changes.
     LSM = freeform "landlock,lockdown,yama,loadpin,safesetid,integrity,selinux,smack,tomoyo,apparmor,bpf";
