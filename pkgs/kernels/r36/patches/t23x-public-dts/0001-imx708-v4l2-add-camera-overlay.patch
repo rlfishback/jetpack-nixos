@@ -1,4 +1,4 @@
-From 58481a8ed439cb04bfb7245b8f009205480753bf Mon Sep 17 00:00:00 2001
+From 15243659afd3e6b36dcb8e59b359161058e3b936 Mon Sep 17 00:00:00 2001
 From: rlfishback <rlfishback@anduril.com>
 Date: Mon, 15 Jun 2026 11:17:42 -0700
 Subject: [PATCH] overlay: imx708: add minimal V4L2-raw IMX708-C overlay
@@ -12,10 +12,12 @@ tree overlay binding the upstream RPi imx708 driver
 dev kit (p3767/p3768).
 
 Differs from the existing tegracam imx708-C overlay in that it omits
-the entire tegra-capture-vi / nvcsi / tegra-camera-platform graph and
-mode<N> register tables — exposes only the raw V4L2 subdev so v4l2-ctl
-can drive the sensor directly. Intended as the kernel-side smoke test
-for streaming IMX708 without the closed nvargus stack.
+tegra-camera-platform / module-badge metadata and all per-mode
+register tables (mclk_khz / pix_clk_hz / line_length / mode_type /
+etc.). Only the V4L2 OF-graph linkage is kept: sensor -> NVCSI
+channel -> VI capture port. The graph wiring is mandatory —
+without it, media_pipeline_start() has no path to walk from
+/dev/videoN down to the sensor's .s_stream callback.
 
 Mclk is routed through TEGRA234_CLK_EXTPERIPH2 at 24 MHz; this is a
 best-inference mapping for CAM1 (TODO note left in the .dts) — not
@@ -24,8 +26,8 @@ mirroring the upstream RPi pattern (cam module powers itself off the
 3v3 connector rail).
 ---
  overlay/Makefile                              |   1 +
- ...ra234-p3767-camera-p3768-imx708-v4l2-C.dts | 110 ++++++++++++++++++
- 2 files changed, 111 insertions(+)
+ ...ra234-p3767-camera-p3768-imx708-v4l2-C.dts | 161 ++++++++++++++++++
+ 2 files changed, 162 insertions(+)
  create mode 100644 overlay/tegra234-p3767-camera-p3768-imx708-v4l2-C.dts
 
 diff --git a/overlay/Makefile b/overlay/Makefile
@@ -42,10 +44,10 @@ index c5b0cad..f787b05 100644
  dtb-y := $(addprefix $(makefile-path)/,$(dtb-y))
 diff --git a/overlay/tegra234-p3767-camera-p3768-imx708-v4l2-C.dts b/overlay/tegra234-p3767-camera-p3768-imx708-v4l2-C.dts
 new file mode 100644
-index 0000000..e5da22c
+index 0000000..37be347
 --- /dev/null
 +++ b/overlay/tegra234-p3767-camera-p3768-imx708-v4l2-C.dts
-@@ -0,0 +1,110 @@
+@@ -0,0 +1,161 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +// SPDX-FileCopyrightText: Copyright (c) 2026 Anduril Industries, Inc.
 +
@@ -54,13 +56,16 @@ index 0000000..e5da22c
 + * CSI port C (CAM1, J21 22-pin connector). Targets the upstream RPi imx708
 + * driver (drivers/media/i2c/imx708.c) — NOT the RidgeRun tegracam fork.
 + *
-+ * No tegra-capture-vi / nvcsi / tegra-camera-platform graph wiring: libcamera's
-+ * simple pipeline handler does not bind on Tegra234 NVCSI under JP6.x (see
-+ * bd issue imx708-hy2 for the verdict), so this overlay exists to expose the
-+ * raw V4L2 subdev for direct streaming via v4l2-ctl / v4l2src.
-+ *
-+ * The MIPI bridge between this sensor and tegra-vi5 / NVCSI is left to the
-+ * platform DT — nothing in this overlay touches it.
++ * Differs from the existing tegracam IMX708-C overlay in that it omits
++ * tegra-camera-platform / module-badge metadata and all per-mode register
++ * tables (mclk_khz / pix_clk_hz / line_length / mode_type / etc.). Only
++ * the V4L2 OF-graph linkage is kept: sensor -> NVCSI channel -> VI capture
++ * port. The graph wiring is mandatory — without it,
++ * media_pipeline_start() has no path to walk from /dev/videoN down to the
++ * sensor's .s_stream callback, even though VIDIOC_STREAMON would succeed
++ * at the VI level. (libcamera's simple pipeline handler is a separate,
++ * userspace concern; see bd imx708-hy2 for why it can't bind on Tegra234
++ * NVCSI under JP6.x.)
 + */
 +
 +/dts-v1/;
@@ -88,7 +93,52 @@ index 0000000..e5da22c
 +				status = "okay";
 +			};
 +
++			tegra-capture-vi {
++				num-channels = <1>;
++				ports {
++					#address-cells = <1>;
++					#size-cells = <0>;
++					vi_port1: port@1 {
++						reg = <0>;
++						imx708_vi_in_c: endpoint {
++							port-index = <2>;
++							bus-width = <2>;
++							remote-endpoint = <&imx708_csi_out_c>;
++						};
++					};
++				};
++			};
++
 +			bus@0 {
++				host1x@13e00000 {
++					nvcsi@15a00000 {
++						num-channels = <1>;
++						#address-cells = <1>;
++						#size-cells = <0>;
++						csi_chan1: channel@1 {
++							reg = <0>;
++							ports {
++								#address-cells = <1>;
++								#size-cells = <0>;
++								csi_chan1_port0: port@0 {
++									reg = <0>;
++									imx708_csi_in_c: endpoint@2 {
++										port-index = <2>;
++										bus-width = <2>;
++										remote-endpoint = <&imx708_ep_c>;
++									};
++								};
++								csi_chan1_port1: port@1 {
++									reg = <1>;
++									imx708_csi_out_c: endpoint@3 {
++										remote-endpoint = <&imx708_vi_in_c>;
++									};
++								};
++							};
++						};
++					};
++				};
++
 +				cam_i2cmux {
 +					status = "okay";
 +					compatible = "i2c-mux-gpio";
@@ -125,11 +175,14 @@ index 0000000..e5da22c
 +
 +							port {
 +								imx708_ep_c: endpoint {
++									port-index = <2>;
++									bus-width = <2>;
 +									data-lanes = <1 2>;
 +									clock-lanes = <0>;
 +									clock-noncontinuous;
 +									link-frequencies =
 +										/bits/ 64 <450000000>;
++									remote-endpoint = <&imx708_csi_in_c>;
 +								};
 +							};
 +						};
