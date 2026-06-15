@@ -1,4 +1,4 @@
-From 15243659afd3e6b36dcb8e59b359161058e3b936 Mon Sep 17 00:00:00 2001
+From bc4c8a03409a21250d83265c090a83f12189a14f Mon Sep 17 00:00:00 2001
 From: rlfishback <rlfishback@anduril.com>
 Date: Mon, 15 Jun 2026 11:17:42 -0700
 Subject: [PATCH] overlay: imx708: add minimal V4L2-raw IMX708-C overlay
@@ -19,15 +19,21 @@ channel -> VI capture port. The graph wiring is mandatory —
 without it, media_pipeline_start() has no path to walk from
 /dev/videoN down to the sensor's .s_stream callback.
 
-Mclk is routed through TEGRA234_CLK_EXTPERIPH2 at 24 MHz; this is a
-best-inference mapping for CAM1 (TODO note left in the .dts) — not
-yet hardware-confirmed. Supplies all share a fixed dummy regulator
-mirroring the upstream RPi pattern (cam module powers itself off the
-3v3 connector rail).
+Mclk is routed through TEGRA234_CLK_EXTPERIPH2 at 24 MHz.  Trace:
+tegra234 pinctrl pad PP.01 = extperiph2_clk_pp1, muxable to function
+EXTPERIPH2; the p3767 BCT pinmux explicitly enables that pad before
+kernel boot.  The p3768 carrier has two CSI camera connectors and
+exactly two mclk pads (PP.00 -> EXTPERIPH1, PP.01 -> EXTPERIPH2);
+they cannot be muxed onto a single connector.  Numerical convention
+PP.0 -> CAM0, PP.1 -> CAM1 makes EXTPERIPH2 = CAM1_MCLK.  Final
+confirmation requires the p3768 schematic or hardware dmesg.
+
+Supplies all share a fixed dummy regulator mirroring the upstream
+RPi pattern (cam module powers itself off the 3v3 connector rail).
 ---
  overlay/Makefile                              |   1 +
- ...ra234-p3767-camera-p3768-imx708-v4l2-C.dts | 161 ++++++++++++++++++
- 2 files changed, 162 insertions(+)
+ ...ra234-p3767-camera-p3768-imx708-v4l2-C.dts | 178 ++++++++++++++++++
+ 2 files changed, 179 insertions(+)
  create mode 100644 overlay/tegra234-p3767-camera-p3768-imx708-v4l2-C.dts
 
 diff --git a/overlay/Makefile b/overlay/Makefile
@@ -44,10 +50,10 @@ index c5b0cad..f787b05 100644
  dtb-y := $(addprefix $(makefile-path)/,$(dtb-y))
 diff --git a/overlay/tegra234-p3767-camera-p3768-imx708-v4l2-C.dts b/overlay/tegra234-p3767-camera-p3768-imx708-v4l2-C.dts
 new file mode 100644
-index 0000000..37be347
+index 0000000..f6f8b91
 --- /dev/null
 +++ b/overlay/tegra234-p3767-camera-p3768-imx708-v4l2-C.dts
-@@ -0,0 +1,161 @@
+@@ -0,0 +1,178 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +// SPDX-FileCopyrightText: Copyright (c) 2026 Anduril Industries, Inc.
 +
@@ -157,10 +163,27 @@ index 0000000..37be347
 +							reg = <0x1a>;
 +							status = "okay";
 +
-+							/* TODO(imx708-v4l2): EXTPERIPH2 is the best-inference
-+							 * routing for CAM1 mclk; not yet confirmed. If probe
-+							 * fails with -ENODEV / inclk not 24MHz, try
-+							 * EXTPERIPH1/3/4. See bd imx708-hy2 scout notes. */
++							/*
++							 * mclk routing — EXTPERIPH2 is CAM1_MCLK.
++							 *
++							 * Trace: tegra234 pinctrl driver
++							 * (drivers/pinctrl/tegra/pinctrl-tegra234.c)
++							 * defines silicon pad PP.01 = extperiph2_clk_pp1,
++							 * muxable to function EXTPERIPH2 (= TEGRA234_CLK_EXTPERIPH2).
++							 * The p3767 BCT pinmux explicitly enables that pad with
++							 * function "extperiph2" before kernel boot. The p3768
++							 * carrier has exactly two CSI camera connectors
++							 * (CAM0, CAM1) and the BCT enables exactly two mclk
++							 * pads (PP.00 -> EXTPERIPH1, PP.01 -> EXTPERIPH2);
++							 * they cannot be muxed onto a single connector
++							 * (cam_i2c IS GPIO-muxed via CAM_I2C_MUX, mclks are
++							 * not). Numerical convention PP.0 -> CAM0,
++							 * PP.1 -> CAM1 then makes EXTPERIPH2 = CAM1_MCLK.
++							 *
++							 * Final confirmation requires the p3768 schematic or
++							 * dmesg on hardware (imx708 driver verifies 24MHz at
++							 * probe).
++							 */
 +							clocks = <&bpmp TEGRA234_CLK_EXTPERIPH2>;
 +							clock-names = "inclk";
 +							assigned-clocks = <&bpmp TEGRA234_CLK_EXTPERIPH2>;
