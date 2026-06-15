@@ -1,0 +1,161 @@
+From 58481a8ed439cb04bfb7245b8f009205480753bf Mon Sep 17 00:00:00 2001
+From: rlfishback <rlfishback@anduril.com>
+Date: Mon, 15 Jun 2026 11:17:42 -0700
+Subject: [PATCH] overlay: imx708: add minimal V4L2-raw IMX708-C overlay
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Adds tegra234-p3767-camera-p3768-imx708-v4l2-C.dts: a minimal device
+tree overlay binding the upstream RPi imx708 driver
+(drivers/media/i2c/imx708.c) to CAM1 (CSI port C) on the Orin Nano
+dev kit (p3767/p3768).
+
+Differs from the existing tegracam imx708-C overlay in that it omits
+the entire tegra-capture-vi / nvcsi / tegra-camera-platform graph and
+mode<N> register tables — exposes only the raw V4L2 subdev so v4l2-ctl
+can drive the sensor directly. Intended as the kernel-side smoke test
+for streaming IMX708 without the closed nvargus stack.
+
+Mclk is routed through TEGRA234_CLK_EXTPERIPH2 at 24 MHz; this is a
+best-inference mapping for CAM1 (TODO note left in the .dts) — not
+yet hardware-confirmed. Supplies all share a fixed dummy regulator
+mirroring the upstream RPi pattern (cam module powers itself off the
+3v3 connector rail).
+---
+ overlay/Makefile                              |   1 +
+ ...ra234-p3767-camera-p3768-imx708-v4l2-C.dts | 110 ++++++++++++++++++
+ 2 files changed, 111 insertions(+)
+ create mode 100644 overlay/tegra234-p3767-camera-p3768-imx708-v4l2-C.dts
+
+diff --git a/overlay/Makefile b/overlay/Makefile
+index c5b0cad..f787b05 100644
+--- a/overlay/Makefile
++++ b/overlay/Makefile
+@@ -66,6 +66,7 @@ dtbo-y += tegra234-p3767-camera-p3768-imx219-A.dtbo
+ dtbo-y += tegra234-p3767-camera-p3768-imx219-imx477.dtbo
+ dtbo-y += tegra234-p3767-camera-p3768-imx477-C.dtbo
+ dtbo-y += tegra234-p3767-camera-p3768-imx477-A.dtbo
++dtbo-y += tegra234-p3767-camera-p3768-imx708-v4l2-C.dtbo
+ 
+ ifneq ($(dtb-y),)
+ dtb-y := $(addprefix $(makefile-path)/,$(dtb-y))
+diff --git a/overlay/tegra234-p3767-camera-p3768-imx708-v4l2-C.dts b/overlay/tegra234-p3767-camera-p3768-imx708-v4l2-C.dts
+new file mode 100644
+index 0000000..e5da22c
+--- /dev/null
++++ b/overlay/tegra234-p3767-camera-p3768-imx708-v4l2-C.dts
+@@ -0,0 +1,110 @@
++// SPDX-License-Identifier: GPL-2.0-only
++// SPDX-FileCopyrightText: Copyright (c) 2026 Anduril Industries, Inc.
++
++/*
++ * Minimal V4L2-raw IMX708 overlay for Jetson Orin Nano dev kit (p3767/p3768),
++ * CSI port C (CAM1, J21 22-pin connector). Targets the upstream RPi imx708
++ * driver (drivers/media/i2c/imx708.c) — NOT the RidgeRun tegracam fork.
++ *
++ * No tegra-capture-vi / nvcsi / tegra-camera-platform graph wiring: libcamera's
++ * simple pipeline handler does not bind on Tegra234 NVCSI under JP6.x (see
++ * bd issue imx708-hy2 for the verdict), so this overlay exists to expose the
++ * raw V4L2 subdev for direct streaming via v4l2-ctl / v4l2src.
++ *
++ * The MIPI bridge between this sensor and tegra-vi5 / NVCSI is left to the
++ * platform DT — nothing in this overlay touches it.
++ */
++
++/dts-v1/;
++/plugin/;
++
++#define CAM0_RST	TEGRA234_MAIN_GPIO(H, 3)
++#define CAM0_PWDN	TEGRA234_MAIN_GPIO(H, 6)
++#define CAM1_PWDN	TEGRA234_MAIN_GPIO(AC, 0)
++#define CAM_I2C_MUX	TEGRA234_AON_GPIO(CC, 3)
++
++#include <dt-bindings/tegra234-p3767-0000-common.h>
++#include <dt-bindings/clock/tegra234-clock.h>
++
++/ {
++	overlay-name = "Camera IMX708-V4L2-C";
++	jetson-header-name = "Jetson 22pin CSI Connector";
++	compatible = JETSON_COMPATIBLE_P3768;
++
++	fragment@0 {
++		target-path = "/";
++		__overlay__ {
++			cam_dummy_reg: cam_dummy_reg {
++				compatible = "regulator-fixed";
++				regulator-name = "cam-dummy-reg";
++				status = "okay";
++			};
++
++			bus@0 {
++				cam_i2cmux {
++					status = "okay";
++					compatible = "i2c-mux-gpio";
++					#address-cells = <1>;
++					#size-cells = <0>;
++					mux-gpios = <&gpio_aon CAM_I2C_MUX GPIO_ACTIVE_HIGH>;
++					i2c-parent = <&cam_i2c>;
++					i2c@1 {
++						status = "okay";
++						reg = <1>;
++						#address-cells = <1>;
++						#size-cells = <0>;
++
++						imx708_c: camera-sensor@1a {
++							compatible = "sony,imx708";
++							reg = <0x1a>;
++							status = "okay";
++
++							/* TODO(imx708-v4l2): EXTPERIPH2 is the best-inference
++							 * routing for CAM1 mclk; not yet confirmed. If probe
++							 * fails with -ENODEV / inclk not 24MHz, try
++							 * EXTPERIPH1/3/4. See bd imx708-hy2 scout notes. */
++							clocks = <&bpmp TEGRA234_CLK_EXTPERIPH2>;
++							clock-names = "inclk";
++							assigned-clocks = <&bpmp TEGRA234_CLK_EXTPERIPH2>;
++							assigned-clock-rates = <24000000>;
++
++							vana1-supply = <&cam_dummy_reg>;
++							vana2-supply = <&cam_dummy_reg>;
++							vdig-supply  = <&cam_dummy_reg>;
++							vddl-supply  = <&cam_dummy_reg>;
++
++							reset-gpios = <&gpio CAM1_PWDN GPIO_ACTIVE_HIGH>;
++
++							port {
++								imx708_ep_c: endpoint {
++									data-lanes = <1 2>;
++									clock-lanes = <0>;
++									clock-noncontinuous;
++									link-frequencies =
++										/bits/ 64 <450000000>;
++								};
++							};
++						};
++					};
++				};
++
++				gpio@2200000 {
++					camera-control-output-low {
++						gpio-hog;
++						output-low;
++						gpios = <CAM0_RST 0>;
++						label = "cam0-rst";
++					};
++				};
++				gpio@6000d000 {
++					camera-control-output-low {
++						gpio-hog;
++						output-low;
++						gpios = < CAM1_PWDN 0  CAM0_PWDN 0>;
++						label = "cam1-pwdn", "cam0-pwdn";
++					};
++				};
++			};
++		};
++	};
++};
+-- 
+2.54.0
+
