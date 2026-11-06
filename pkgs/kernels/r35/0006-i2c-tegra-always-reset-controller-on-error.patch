@@ -1,0 +1,45 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+Date: Fri, 6 Nov 2026 00:00:00 +0000
+Subject: [PATCH] i2c: tegra: always reset controller on transfer error
+
+L4T 35.7.0 stopped calling tegra_i2c_init() from
+tegra_i2c_error_recover() when multimaster_mode is set, so that an abrupt
+reset does not disturb other masters on the bus. i2c@c240000 on Xavier AGX
+is multi-master, so after 35.7.0 the controller is not reset after a
+failed transfer there.
+
+With i2c-tegra dynamic debug on a Xavier AGX, a transfer completes with a
+NACK (msg_err=1) about 14 s after boot. Unpatched, no reset follows, and
+the next transfer, about 50 s later (an ina3221 access), times out:
+
+  tegra-i2c c240000.i2c: I2C transfer timed out
+  ina3221 1-0040: Unable to reset device
+
+With the reset restored, the controller is reset right after the NACK and
+the later transfer completes. The timeout message itself comes from
+tegra_i2c_xfer_msg(), which already resets unconditionally; the guard
+acts on the earlier NACK.
+
+Restore the 35.6.5 behaviour of always resetting the controller. This does
+not explain why the first transfer NACKs, or why the controller that was
+not reset then times out 50 s later. The tegra_i2c_change_clock_rate()
+return value fix from the same upstream change is not reverted.
+---
+ drivers/i2c/busses/i2c-tegra.c | 6 +-----
+ 1 file changed, 1 insertion(+), 5 deletions(-)
+
+--- a/drivers/i2c/busses/i2c-tegra.c
++++ b/drivers/i2c/busses/i2c-tegra.c
+@@ -1500,11 +1500,7 @@
+ 	if (i2c_dev->msg_err == I2C_ERR_NONE)
+ 		return 0;
+ 
+-	/* Do not reset the controller if multimaster mode is enabled.
+-	 * Abrupt reset may disturb the other masters on the bus.
+-	 */
+-	if (!i2c_dev->multimaster_mode)
+-		tegra_i2c_init(i2c_dev);
++	tegra_i2c_init(i2c_dev);
+ 
+ 	/* start recovery upon arbitration loss in single master mode.
+ 	 * Return the appropriate error otherwise

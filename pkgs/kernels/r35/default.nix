@@ -172,6 +172,14 @@ buildLinux (args // {
       name = "spi: tegra210-qspi: scale xfer completion timeout to transfer size";
       patch = ./0005-spi-tegra210-qspi-scale-xfer-completion-timeout-to-.patch;
     }
+
+    # L4T 35.7.0 skips the I2C controller reset after a failed transfer in
+    # multi-master mode (Xavier AGX i2c@c240000), and a later transfer times
+    # out. Restore the 35.6.5 behavior of always resetting.
+    {
+      name = "i2c: tegra: always reset controller on transfer error";
+      patch = ./0006-i2c-tegra-always-reset-controller-on-error.patch;
+    }
   ] ++ kernelPatches;
 
   structuredExtraConfig = with lib.kernel; {
