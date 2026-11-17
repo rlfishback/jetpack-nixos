@@ -1,0 +1,23 @@
+Subject: [PATCH] kbuild: tegra: don't include overlay root Makefiles at top level
+
+Makefile.tegra merges each overlay's $(subdir)/Makefile into the dir being
+built. For the top-level dir this pulls in the nvmap overlay's root
+Makefile, so prepare0's `$(build)=.` compiles nvmap (obj-m) in parallel with
+generating include/generated/{bounds,asm-offsets}.h and fails. The real
+nvmap is built via nvidia/drivers/video/tegra/nvmap/. Keep the overlay
+include paths, but skip the Makefile include for ".".
+
+---
+--- a/scripts/Makefile.tegra
++++ b/scripts/Makefile.tegra
+@@ -13,7 +13,10 @@
+ define include_overlay
+   subdir := $(if $(src),$(src),$(obj))
+   ovl_file := $(if $(wildcard $(overlay)/$(subdir)/Kbuild),$(overlay)/$(subdir)/Kbuild,$(overlay)/$(subdir)/Makefile)
++  # Top-level dir: the nvmap overlay root Makefile would build during prepare0, racing include/generated/*.
++  ifneq ($(subdir),.)
+   -include $(ovl_file)
++  endif
+   EXTRA_CFLAGS += -I$(overlay)/include
+ endef
+ $(foreach overlay,$(KERNEL_OVERLAYS),$(eval $(value include_overlay)))

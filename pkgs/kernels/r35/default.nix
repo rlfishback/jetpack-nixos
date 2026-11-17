@@ -172,6 +172,12 @@ buildLinux (args // {
       name = "spi: tegra210-qspi: scale xfer completion timeout to transfer size";
       patch = ./0005-spi-tegra210-qspi-scale-xfer-completion-timeout-to-.patch;
     }
+
+    # nixpkgs 26.11 no longer runs `make prepare` serially, exposing an nvmap race in prepare0.
+    {
+      name = "kbuild: tegra: don't include overlay root Makefiles at top level";
+      patch = ./0006-kbuild-tegra-skip-overlay-root-Makefiles-at-top-level.patch;
+    }
   ] ++ kernelPatches;
 
   structuredExtraConfig = with lib.kernel; {
