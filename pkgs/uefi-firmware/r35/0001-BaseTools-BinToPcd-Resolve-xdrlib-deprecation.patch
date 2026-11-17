@@ -1,0 +1,67 @@
+From 5cadb8ce2148979b6c464f6da5a8cd97425c5165 Mon Sep 17 00:00:00 2001
+From: Joey Vagedes <joey.vagedes@gmail.com>
+Date: Wed, 28 Jun 2023 00:27:22 +0800
+Subject: [PATCH] BaseTools: BinToPcd: Resolve xdrlib deprecation
+
+Removes the dependency on xdrlib and replaces it with custom logic to
+pack a per the xdr requirements. Necessary as xdrlib is being deprecated
+in python 3.13.
+
+Cc: Rebecca Cran <rebecca@bsdio.com>
+Cc: Liming Gao <gaoliming@byosoft.com.cn>
+Cc: Bob Feng <bob.c.feng@intel.com>
+Cc: Yuwei Chen <yuwei.chen@intel.com>
+Cc: Michael D Kinney <michael.d.kinney@intel.com>
+Signed-off-by: Joey Vagedes <joeyvagedes@gmail.com>
+Reviewed-by: Liming Gao <gaoliming@byosoft.com.cn>
+Reviewed-by: Michael D Kinney <michael.d.kinney@intel.com>
+---
+ BaseTools/Scripts/BinToPcd.py | 19 +++++++++++++++----
+ 1 file changed, 15 insertions(+), 4 deletions(-)
+
+diff --git a/BaseTools/Scripts/BinToPcd.py b/BaseTools/Scripts/BinToPcd.py
+index 3bc557b841..460c08b7f7 100644
+--- a/BaseTools/Scripts/BinToPcd.py
++++ b/BaseTools/Scripts/BinToPcd.py
+@@ -14,6 +14,9 @@ import sys
+ import argparse
+ import re
+ import xdrlib
++import io
++import struct
++import math
+ 
+ #
+ # Globals for help information
+@@ -46,16 +49,24 @@ if __name__ == '__main__':
+             raise argparse.ArgumentTypeError (Message)
+         return Argument
+ 
++    def XdrPackBuffer (buffer):
++        packed_bytes = io.BytesIO()
++        for unpacked_bytes in buffer:
++            n = len(unpacked_bytes)
++            packed_bytes.write(struct.pack('>L',n))
++            data = unpacked_bytes[:n]
++            n = math.ceil(n/4)*4
++            data = data + (n - len(data)) * b'\0'
++            packed_bytes.write(data)
++        return packed_bytes.getvalue()
++
+     def ByteArray (Buffer, Xdr = False):
+         if Xdr:
+             #
+             # If Xdr flag is set then encode data using the Variable-Length Opaque
+             # Data format of RFC 4506 External Data Representation Standard (XDR).
+             #
+-            XdrEncoder = xdrlib.Packer ()
+-            for Item in Buffer:
+-                XdrEncoder.pack_bytes (Item)
+-            Buffer = bytearray (XdrEncoder.get_buffer ())
++            Buffer = bytearray (XdrPackBuffer (Buffer))
+         else:
+             #
+             # If Xdr flag is not set, then concatenate all the data
+-- 
+2.54.0
+

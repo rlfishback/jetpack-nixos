@@ -1,0 +1,39 @@
+From 8c09d862bfb034e00b6b3bc37fe37243c866dd3a Mon Sep 17 00:00:00 2001
+From: Joey Vagedes <joey.vagedes@gmail.com>
+Date: Wed, 26 Jun 2024 14:04:28 -0700
+Subject: [PATCH] BaseTools: BinToPcd: Remove xdrlib dependency
+
+The xdrlib dependency was removed in commit
+5cadb8ce2148979b6c464f6da5a8cd97425c5165 but the actual import of the
+module was not removed. This commit removes the import of xdrlib and
+sorts the imports.
+
+Signed-off-by: Joey Vagedes <joey.vagedes@gmail.com>
+---
+ BaseTools/Scripts/BinToPcd.py | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/BaseTools/Scripts/BinToPcd.py b/BaseTools/Scripts/BinToPcd.py
+index 460c08b7f7..be726cc6d8 100644
+--- a/BaseTools/Scripts/BinToPcd.py
++++ b/BaseTools/Scripts/BinToPcd.py
+@@ -10,13 +10,12 @@ BinToPcd
+ '''
+ from __future__ import print_function
+ 
+-import sys
+ import argparse
+-import re
+-import xdrlib
+ import io
+-import struct
+ import math
++import re
++import struct
++import sys
+ 
+ #
+ # Globals for help information
+-- 
+2.54.0
+

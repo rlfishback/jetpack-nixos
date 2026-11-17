@@ -72,6 +72,10 @@ let
       # Originaly from e063f8b8a53861043b9872cc35b08a3dc03b0942 upstream, but
       # vendored here to fix merge conflict
       ./0001-BaseTools-Pccts-set-C-standard.patch
+
+      # Python 3.13 removed xdrlib; backport upstream 5cadb8ce21 and 8c09d862bf.
+      ./0001-BaseTools-BinToPcd-Resolve-xdrlib-deprecation.patch
+      ./0002-BaseTools-BinToPcd-Remove-xdrlib-dependency.patch
     ];
   };
 
